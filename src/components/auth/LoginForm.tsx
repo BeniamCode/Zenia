@@ -43,7 +43,17 @@ export function LoginForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, values.email, values.password);
+      const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
+      const user = userCredential.user;
+
+      if (user) {
+        const idToken = await user.getIdToken();
+        // Set cookie for middleware to recognize authentication state
+        // Max-age is 7 days, SameSite=Lax for security
+        document.cookie = `firebaseIdToken=${idToken}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+        // The userRole cookie will be set by AuthContext when the profile (including role) is loaded.
+      }
+      
       toast({
         title: "Login Successful",
         description: "Welcome back!",

@@ -30,56 +30,65 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUserProfileState(profile);
     if (profile) {
       setIsAdmin(profile.role === 'admin');
+      document.cookie = `userRole=${profile.role}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
     } else {
       setIsAdmin(false);
+      document.cookie = 'userRole=; path=/; max-age=0; SameSite=Lax'; // Clear role cookie
     }
   }, []);
 
   useEffect(() => {
     const authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setLoading(true); // Set loading true when auth state might change
+      setLoading(true); 
       if (firebaseUser) {
         setUser(firebaseUser);
-        // Firestore real-time listener for user profile
+        // It's good practice to set the firebaseIdToken cookie here as well,
+        // ensuring it's refreshed if the user was already logged in.
+        try {
+            const idToken = await firebaseUser.getIdToken();
+            document.cookie = `firebaseIdToken=${idToken}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+        } catch (tokenError) {
+            console.error("Error getting ID token in AuthContext:", tokenError);
+            // Clear potentially stale token cookie if fetching new one fails
+            document.cookie = 'firebaseIdToken=; path=/; max-age=0; SameSite=Lax';
+        }
+
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         const profileUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const profileData = docSnap.data() as UserProfile;
-            setUserProfileState(profileData);
-            setIsAdmin(profileData.role === 'admin');
+            updateUserProfileInContext(profileData); // This will set userProfile and userRole cookie
           } else {
             console.warn("User profile not found in Firestore for UID:", firebaseUser.uid);
-            // Create a default local profile if none exists in Firestore, but this shouldn't happen if signup creates it
             const defaultProfile: UserProfile = { 
               uid: firebaseUser.uid, 
               email: firebaseUser.email, 
               displayName: firebaseUser.displayName, 
-              role: 'client', // Default to client
-              // Ensure all required fields for UserProfile are here
+              role: 'client', 
             };
-            setUserProfileState(defaultProfile);
-            setIsAdmin(false);
+            updateUserProfileInContext(defaultProfile);
           }
           setLoading(false);
         }, (error) => {
           console.error("Error fetching user profile:", error);
-          setUserProfileState(null); // Clear profile on error
-          setIsAdmin(false);
+          updateUserProfileInContext(null);
           setLoading(false);
         });
-        return () => profileUnsubscribe(); // Cleanup Firestore listener
+        return () => profileUnsubscribe(); 
       } else {
         setUser(null);
-        setUserProfileState(null);
-        setIsAdmin(false);
+        updateUserProfileInContext(null); // This will clear userProfile and userRole cookie
+        // Clear firebaseIdToken cookie on logout
+        document.cookie = 'firebaseIdToken=; path=/; max-age=0; SameSite=Lax';
         setLoading(false);
       }
     });
 
-    return () => authUnsubscribe(); // Cleanup auth listener
-  }, []);
+    return () => authUnsubscribe(); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateUserProfileInContext]); // Added updateUserProfileInContext to dependencies
 
-  if (loading && !userProfile && user === null) { // Show loader only on initial app load or full sign-out
+  if (loading && !userProfile && user === null) { 
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
