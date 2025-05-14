@@ -3,78 +3,102 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --background: 60 56% 91%; /* Beige (#F5F5DC) */
+    --foreground: 120 25% 20%; /* Dark Greenish - Good contrast for Beige */
+
+    --card: 60 60% 97%; /* Lighter Beige/Off-white */
+    --card-foreground: 120 25% 20%; /* Dark Greenish */
+
+    --popover: 60 60% 97%; /* Lighter Beige/Off-white */
+    --popover-foreground: 120 25% 20%; /* Dark Greenish */
+
+    --primary: 120 60% 34%; /* Forest Green (#228B22) */
+    --primary-foreground: 60 100% 98%; /* Very Light Beige/Off-white - Good contrast for Forest Green */
+
+    --secondary: 60 30% 85%; /* Muted Beige - for Shadcn secondary elements */
+    --secondary-foreground: 120 40% 25%; /* Darker Green */
+
+    --muted: 60 25% 88%; /* Slightly more muted Beige */
+    --muted-foreground: 120 15% 50%; /* Muted Dark Green */
+
+    --accent: 51 100% 50%; /* Gold (#FFD700) */
+    --accent-foreground: 40 100% 15%; /* Dark Brownish - Good contrast for Gold */
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 60 30% 80%; /* Slightly darker Beige for borders */
+    --input: 60 30% 83%; /* Slightly different Beige for inputs */
+    --ring: 51 100% 50%; /* Gold for focus rings */
+
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
+
+    /* Sidebar specific colors */
+    --sidebar-background: 120 40% 20%; /* Dark Forest Green */
+    --sidebar-foreground: 60 40% 85%; /* Light Beige/Off-white */
+    --sidebar-primary: 51 100% 60%; /* Brighter Gold */
+    --sidebar-primary-foreground: 40 100% 15%; /* Dark Brownish */
+    --sidebar-accent: 120 40% 28%; /* Hover - slightly lighter dark green */
+    --sidebar-accent-foreground: 60 60% 95%; /* Lightest Beige/White */
+    --sidebar-border: 120 40% 15%; /* Even darker green for borders */
+    --sidebar-ring: 51 100% 60%; /* Brighter Gold */
+
+    --chart-1: 120 70% 50%;
+    --chart-2: 50 80% 55%;
+    --chart-3: 30 70% 60%;
+    --chart-4: 200 65% 50%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 120 15% 10%; /* Very Dark Green */
+    --foreground: 60 40% 85%; /* Light Beige */
+
+    --card: 120 15% 15%;
+    --card-foreground: 60 40% 85%;
+
+    --popover: 120 15% 15%;
+    --popover-foreground: 60 40% 85%;
+
+    --primary: 120 60% 45%; /* Slightly lighter Forest Green for dark mode */
+    --primary-foreground: 120 20% 95%; /* Almost white, with a hint of green */
+    
+    --secondary: 120 25% 25%; /* Darker Green for Shadcn secondary */
+    --secondary-foreground: 60 30% 80%; /* Muted Light Beige */
+
+    --muted: 120 15% 20%;
+    --muted-foreground: 60 20% 65%;
+
+    --accent: 51 100% 60%; /* Gold, slightly brighter */
+    --accent-foreground: 40 100% 15%; /* Dark Brownish */
+
+    --destructive: 0 60% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 120 15% 22%;
+    --input: 120 15% 25%;
+    --ring: 51 100% 60%; /* Gold */
+
+    /* Dark Sidebar specific colors */
+    --sidebar-background: 120 20% 8%; /* Even darker base for sidebar */
+    --sidebar-foreground: 60 40% 75%; /* Slightly less bright Beige */
+    --sidebar-primary: 51 100% 65%; /* Bright Gold */
+    --sidebar-primary-foreground: 40 100% 10%; /* Very Dark Brownish */
+    --sidebar-accent: 120 20% 12%; /* Hover for sidebar items */
+    --sidebar-accent-foreground: 60 50% 85%; /* Brighter Beige */
+    --sidebar-border: 120 20% 5%;
+    --sidebar-ring: 51 100% 65%; /* Bright Gold */
+
+    --chart-1: 120 70% 60%;
+    --chart-2: 50 80% 65%;
+    --chart-3: 30 70% 70%;
+    --chart-4: 200 65% 60%;
+    --chart-5: 340 75% 65%;
   }
 }
 
