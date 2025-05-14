@@ -48,6 +48,7 @@ export function LoginForm() {
         title: "Login Successful",
         description: "Welcome back!",
       });
+      // Redirect to the user's dashboard upon successful login
       router.push("/dashboard");
     } catch (error: any) {
       console.error("Login error:", error);
