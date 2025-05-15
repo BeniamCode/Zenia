@@ -22,6 +22,7 @@ import { Loader2, ScanLine, Search, UploadCloud, Info, Edit3, Video, VideoOff, C
 import Image from 'next/image';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Quagga from 'quagga'; // ES6 import
+import OpenFoodFacts from 'openfoodfacts-nodejs';
 
 // Minimal type definitions for QuaggaJS to avoid errors if @types/quagga is not available
 interface QuaggaJSCodeResult {
@@ -43,6 +44,7 @@ const formSchema = z.object({
 
 type BarcodeFormValues = z.infer<typeof formSchema>;
 
+// Adjusted to better match potential SDK response structure
 interface OpenFoodFactsProduct {
   product_name_en?: string;
   product_name?: string;
@@ -59,7 +61,19 @@ interface OpenFoodFactsProduct {
   };
   brands?: string;
   quantity?: string;
+  // SDK might wrap product in a top-level 'product' key or return directly
+  // and might have a status or status_verbose field.
+  // For simplicity, we'll primarily look for these fields directly on the result.
 }
+
+// Type for the SDK's getProduct response
+interface SdkProductResponse {
+  status: number; // 0 for not found, 1 for found
+  status_verbose: string;
+  product?: OpenFoodFactsProduct; 
+  // The SDK might return other fields, this is a minimal interface
+}
+
 
 export function BarcodeEntry() {
   const { toast } = useToast();
@@ -74,6 +88,7 @@ export function BarcodeEntry() {
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const detectedOnce = useRef(false);
+  const openFoodFactsClient = useRef(new OpenFoodFacts());
 
 
   const stableFetchProductData = useCallback(async (barcode: string) => {
@@ -87,12 +102,12 @@ export function BarcodeEntry() {
     form.resetField("portionSize");
 
     try {
-      const response = await fetch(`https://world.openfoodfacts.org/api/v3/product/${barcode}.json?fields=product_name_en,product_name,generic_name_en,generic_name,image_url,image_small_url,brands,quantity`);
-      if (!response.ok) throw new Error(`API error! status: ${response.status}`);
-      const data = await response.json();
+      // The SDK's getProduct method might return the product directly or an object containing it.
+      // It typically includes a status field.
+      const response = await openFoodFactsClient.current.getProduct(barcode) as SdkProductResponse;
 
-      if (data.status === 1 && data.product) {
-        const product = data.product as OpenFoodFactsProduct;
+      if (response && response.status === 1 && response.product) {
+        const product = response.product;
         setProductData(product);
         const productName = product.product_name_en || product.product_name || product.generic_name_en || product.generic_name || "Unknown Product";
         form.setValue("foodName", productName);
@@ -100,12 +115,13 @@ export function BarcodeEntry() {
         form.setValue("portionSize", product.quantity || "1 serving (adjust as needed)");
         toast({ title: "Product Found!", description: productName });
       } else {
-        toast({ variant: "destructive", title: "Product Not Found", description: data.status_verbose || "No product data found for this barcode." });
+        toast({ variant: "destructive", title: "Product Not Found", description: response?.status_verbose || "No product data found for this barcode." });
          form.setValue("foodName", "Unknown Product (Not Found)");
          form.setValue("portionSize", "1 serving");
          form.setValue("barcode", barcode);
       }
     } catch (error: any) {
+      console.error("OpenFoodFacts SDK error:", error);
       toast({
         variant: "destructive",
         title: "API Error",
@@ -245,6 +261,15 @@ export function BarcodeEntry() {
       setIsLoading(false);
     }
   }
+
+  const form = useForm<BarcodeFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      barcode: "",
+      foodName: "",
+      portionSize: "",
+    },
+  });
 
   return (
     <Form {...form}>
