@@ -6,7 +6,7 @@ export interface UserProfile {
   email: string | null;
   displayName: string | null;
   role: 'admin' | 'client'; 
-  createdAt?: Timestamp | Date; // Optional: when the user profile was created
+  createdAt?: string; // ISO date string
   // Add other profile fields as needed, e.g., nutritional goals, preferences
 }
 
@@ -21,9 +21,9 @@ export interface FoodLog {
   id?: string; // Firestore document ID, added after retrieval
   userId: string; // ID of the user who created the log
   foodName: string;
-  portionSize: string;
+  portionSize: number; // Number of palm-sized portions
   entryMethod: 'manual' | 'ai' | 'barcode';
-  timestamp: Timestamp; // Firestore Timestamp for server-side consistency
+  timestamp: string; // ISO date string for client-side
   imageUrl?: string; // For AI entry - could be a temporary data URI or a permanent storage URL
   barcode?: string; // For barcode entry
   apiData?: any; // Data from OpenFoodFacts API or other sources for barcode/AI entries

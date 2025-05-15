@@ -1,9 +1,9 @@
 import type { FoodLog } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Utensils, Camera, ScanSearch, CalendarDays, Tag, Info } from 'lucide-react';
+import { Utensils, Camera, ScanSearch, CalendarDays, Tag, Info, Hand } from 'lucide-react';
 import Image from 'next/image';
-import { format, isValid } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 interface FoodLogItemProps {
   log: FoodLog;
@@ -23,8 +23,17 @@ const getEntryIcon = (method: FoodLog['entryMethod']) => {
 };
 
 export function FoodLogItem({ log }: FoodLogItemProps) {
-  const formattedDate = log.timestamp && isValid(log.timestamp.toDate()) 
-    ? format(log.timestamp.toDate(), 'MMM d, yyyy HH:mm') 
+  let dateToFormat: Date | number;
+  if (typeof log.timestamp === 'string') {
+    dateToFormat = parseISO(log.timestamp);
+  } else if (log.timestamp && 'toDate' in log.timestamp) { // Handle Firestore Timestamp if not converted
+    dateToFormat = log.timestamp.toDate();
+  } else {
+    dateToFormat = new Date(); // Fallback, should ideally not happen
+  }
+
+  const formattedDate = isValid(dateToFormat) 
+    ? format(dateToFormat, 'MMM d, yyyy HH:mm') 
     : 'Date N/A';
 
   const imageUrl = log.entryMethod === 'ai' && log.imageUrl 
@@ -41,8 +50,8 @@ export function FoodLogItem({ log }: FoodLogItemProps) {
         <div className="flex justify-between items-start gap-4">
             <div className="flex-1">
                 <CardTitle className="text-xl text-foreground">{log.foodName}</CardTitle>
-                <CardDescription className="text-sm text-muted-foreground mt-1">
-                    Portion: {log.portionSize}
+                <CardDescription className="text-sm text-muted-foreground mt-1 flex items-center">
+                    <Hand className="h-4 w-4 mr-1 text-primary/70" /> {log.portionSize} palm-sized portion(s)
                 </CardDescription>
             </div>
             {imageUrl && (
@@ -69,6 +78,11 @@ export function FoodLogItem({ log }: FoodLogItemProps) {
          {log.entryMethod === 'barcode' && log.apiData?.brands && (
              <p className="text-xs text-muted-foreground flex items-center mt-1">
                 <Info className="h-3 w-3 mr-1"/> Brand: {log.apiData.brands}
+            </p>
+        )}
+         {log.entryMethod === 'barcode' && log.apiData?.quantity && (
+             <p className="text-xs text-muted-foreground flex items-center mt-1">
+                <Info className="h-3 w-3 mr-1"/> Package Size: {log.apiData.quantity}
             </p>
         )}
       </CardContent>

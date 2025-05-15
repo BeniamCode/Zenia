@@ -26,7 +26,9 @@ import { Progress } from "@/components/ui/progress";
 
 const formSchema = z.object({
   foodName: z.string().min(2, { message: "Food name must be at least 2 characters." }).max(200, { message: "Food name must be 200 characters or less."}),
-  portionSize: z.string().min(1, { message: "Portion size is required." }).max(100, { message: "Portion size must be 100 characters or less."}), // Increased max length
+  portionSize: z.coerce.number() // Coerce string from input to number
+                  .min(0.1, { message: "Portion must be at least 0.1." })
+                  .max(20, { message: "Portion size seems too large (max 20 palms)."}),
   imageFile: z.instanceof(File).optional(),
 });
 
@@ -47,7 +49,7 @@ export function AiEntryForm() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       foodName: "",
-      portionSize: "",
+      portionSize: 1, // Default to 1 palm-sized portion
     },
   });
 
@@ -62,7 +64,7 @@ export function AiEntryForm() {
       reader.readAsDataURL(file);
       setAiResult(null); // Reset AI result when new image is selected
       form.resetField("foodName");
-      form.resetField("portionSize");
+      form.setValue("portionSize", 1); // Reset portion to default
     }
   };
 
@@ -100,7 +102,7 @@ export function AiEntryForm() {
       if (result.portionSize) {
         form.setValue("portionSize", result.portionSize);
       } else {
-        form.setValue("portionSize", "1 serving"); // Default if AI doesn't provide
+        form.setValue("portionSize", 1); // Default if AI doesn't provide
       }
       toast({ title: "Analysis Complete", description: "AI has pre-filled the form. Please review and confirm." });
     } catch (error: any) {
@@ -131,9 +133,9 @@ export function AiEntryForm() {
       });
       toast({
         title: "Food Logged with AI",
-        description: `${values.foodName} has been added to your log.`,
+        description: `${values.foodName} (${values.portionSize} palm(s)) has been added to your log.`,
       });
-      form.reset();
+      form.reset({ foodName: "", portionSize: 1, imageFile: undefined });
       setImagePreview(null);
       setAiResult(null);
       if (fileInputRef.current) {
@@ -173,7 +175,7 @@ export function AiEntryForm() {
 
         {imagePreview && (
           <div className="mt-4 p-2 border rounded-md bg-muted/50">
-            <Image src={imagePreview} alt="Meal preview" width={200} height={200} className="rounded-md object-cover mx-auto shadow-md" data-ai-hint="food meal" />
+            <Image src={imagePreview} alt="Meal preview" width={200} height={200} className="rounded-md object-cover mx-auto shadow-md" data-ai-hint="food meal"/>
           </div>
         )}
 
@@ -206,9 +208,16 @@ export function AiEntryForm() {
           name="portionSize"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Portion Size {aiResult && aiResult.portionSize && <span className="text-xs text-accent">(AI Suggested)</span>}</FormLabel>
+              <FormLabel>Palm-sized Portions {aiResult && aiResult.portionSize && <span className="text-xs text-accent">(AI Suggested)</span>}</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., 1 plate, 250g, 1 medium apple" {...field} />
+                <Input 
+                  type="number" 
+                  placeholder="e.g., 1.5" 
+                  step="0.1" 
+                  {...field}
+                  // value={field.value || ''}
+                  // onChange={e => field.onChange(parseFloat(e.target.value) || 0)} 
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

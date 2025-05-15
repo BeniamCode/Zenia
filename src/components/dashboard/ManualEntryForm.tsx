@@ -21,13 +21,15 @@ import React from "react";
 import { Loader2, Save } from "lucide-react";
 
 const formSchema = z.object({
-  foodName: z.string().min(2, { message: "Food name must be at least 2 characters." }).max(200, { message: "Food name must be 200 characters or less."}), // Increased max length
-  portionSize: z.string().min(1, { message: "Portion size is required." }).max(100, { message: "Portion size must be 100 characters or less."}), // Increased max length
+  foodName: z.string().min(2, { message: "Food name must be at least 2 characters." }).max(200, { message: "Food name must be 200 characters or less."}),
+  portionSize: z.coerce.number() // Coerce string from input to number
+                 .min(0.1, { message: "Portion must be at least 0.1." })
+                 .max(20, { message: "Portion size seems too large (max 20 palms)."}),
   // Optional fields, could be expanded
-  calories: z.number().optional(),
-  protein: z.number().optional(),
-  carbs: z.number().optional(),
-  fat: z.number().optional(),
+  calories: z.coerce.number().optional(), // Coerce for optional number inputs
+  protein: z.coerce.number().optional(),
+  carbs: z.coerce.number().optional(),
+  fat: z.coerce.number().optional(),
 });
 
 export function ManualEntryForm() {
@@ -39,7 +41,7 @@ export function ManualEntryForm() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       foodName: "",
-      portionSize: "",
+      portionSize: 1, // Default to 1 palm-sized portion
     },
   });
 
@@ -52,13 +54,18 @@ export function ManualEntryForm() {
     try {
       await addFoodLogEntry(user.uid, {
         ...values,
+        // Ensure numeric fields are numbers, Zod coerce should handle it
+        calories: values.calories || undefined,
+        protein: values.protein || undefined,
+        carbs: values.carbs || undefined,
+        fat: values.fat || undefined,
         entryMethod: "manual",
       });
       toast({
         title: "Food Logged",
-        description: `${values.foodName} has been added to your log.`,
+        description: `${values.foodName} (${values.portionSize} palm(s)) has been added to your log.`,
       });
-      form.reset();
+      form.reset({ foodName: "", portionSize: 1, calories: undefined, protein: undefined, carbs: undefined, fat: undefined });
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -92,9 +99,16 @@ export function ManualEntryForm() {
           name="portionSize"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Portion Size</FormLabel>
+              <FormLabel>Palm-sized Portions</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., 1 large bowl, 250g, 1 slice" {...field} />
+                <Input 
+                  type="number" 
+                  placeholder="e.g., 1.5" 
+                  step="0.1" 
+                  {...field} 
+                  // value={field.value || ''} // Handle potential undefined from reset if not careful
+                  // onChange={e => field.onChange(parseFloat(e.target.value) || 0)} // Ensure it's a number
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -39,7 +39,9 @@ interface QuaggaJSResultObject {
 const formSchema = z.object({
   barcode: z.string().optional(), 
   foodName: z.string().min(1, { message: "Food name is required." }).max(200, { message: "Food name must be 200 characters or less."}),
-  portionSize: z.string().min(1, { message: "Portion size is required." }).max(100, { message: "Portion size must be 100 characters or less."}),
+  portionSize: z.coerce.number() // Coerce string from input to number
+                  .min(0.1, { message: "Portion must be at least 0.1." })
+                  .max(20, { message: "Portion size seems too large (max 20 palms)."}),
 });
 
 type BarcodeFormValues = z.infer<typeof formSchema>;
@@ -60,7 +62,7 @@ interface OpenFoodFactsProduct {
     fat_100g?: number;
   };
   brands?: string;
-  quantity?: string;
+  quantity?: string; // This is the package size, e.g., "250g"
   // SDK might wrap product in a top-level 'product' key or return directly
   // and might have a status or status_verbose field.
   // For simplicity, we'll primarily look for these fields directly on the result.
@@ -99,11 +101,9 @@ export function BarcodeEntry() {
     setIsFetchingProduct(true);
     setProductData(null); 
     form.resetField("foodName");
-    form.resetField("portionSize");
+    form.setValue("portionSize", 1); // Default to 1 palm-sized portion
 
     try {
-      // The SDK's getProduct method might return the product directly or an object containing it.
-      // It typically includes a status field.
       const response = await openFoodFactsClient.current.getProduct(barcode) as SdkProductResponse;
 
       if (response && response.status === 1 && response.product) {
@@ -112,12 +112,13 @@ export function BarcodeEntry() {
         const productName = product.product_name_en || product.product_name || product.generic_name_en || product.generic_name || "Unknown Product";
         form.setValue("foodName", productName);
         form.setValue("barcode", barcode);
-        form.setValue("portionSize", product.quantity || "1 serving (adjust as needed)");
+        // Default portionSize to 1 palm, the product.quantity is for info
+        form.setValue("portionSize", 1); 
         toast({ title: "Product Found!", description: productName });
       } else {
         toast({ variant: "destructive", title: "Product Not Found", description: response?.status_verbose || "No product data found for this barcode." });
          form.setValue("foodName", "Unknown Product (Not Found)");
-         form.setValue("portionSize", "1 serving");
+         form.setValue("portionSize", 1);
          form.setValue("barcode", barcode);
       }
     } catch (error: any) {
@@ -128,7 +129,7 @@ export function BarcodeEntry() {
         description: error.message || "Could not fetch product data. Please check the barcode and try again.",
       });
         form.setValue("foodName", "Error Fetching Product");
-        form.setValue("portionSize", "1 serving");
+        form.setValue("portionSize", 1);
         form.setValue("barcode", barcode);
     } finally {
       setIsFetchingProduct(false);
@@ -205,10 +206,9 @@ export function BarcodeEntry() {
 
     return () => {
       Quagga.offDetected(onDetected);
-      // Check if Quagga is running before stopping
-      // Note: Quagga.running is not a documented public API, but Quagga.stop() itself is safe to call.
-      // It handles internal checks.
-      Quagga.stop();
+      if (Quagga.initialized) { // Check if Quagga was initialized before trying to stop
+        Quagga.stop();
+      }
       if (videoRef.current && videoRef.current.srcObject) {
           const stream = videoRef.current.srcObject as MediaStream;
           stream.getTracks().forEach(track => track.stop());
@@ -223,7 +223,7 @@ export function BarcodeEntry() {
       setIsScanning(false); 
     } else {
       setProductData(null);
-      form.reset();
+      form.reset({barcode: "", foodName: "", portionSize: 1});
       setManualBarcode("");
       setIsScanning(true); 
     }
@@ -245,9 +245,9 @@ export function BarcodeEntry() {
       });
       toast({
         title: "Food Logged via Barcode",
-        description: `${values.foodName} has been added to your log.`,
+        description: `${values.foodName} (${values.portionSize} palm(s)) has been added to your log.`,
       });
-      form.reset();
+      form.reset({barcode: "", foodName: "", portionSize: 1});
       setProductData(null);
       setManualBarcode("");
       if(isScanning) setIsScanning(false);
@@ -267,7 +267,7 @@ export function BarcodeEntry() {
     defaultValues: {
       barcode: "",
       foodName: "",
-      portionSize: "",
+      portionSize: 1,
     },
   });
 
@@ -329,7 +329,7 @@ export function BarcodeEntry() {
                       value={manualBarcode}
                       onChange={(e) => {
                         setManualBarcode(e.target.value);
-                        field.onChange(e.target.value); // Keep react-hook-form in sync if needed
+                        field.onChange(e.target.value); 
                       }}
                       disabled={isScanning}
                     />
@@ -389,9 +389,17 @@ export function BarcodeEntry() {
           name="portionSize"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Portion Size Consumed {productData && productData.quantity && <span className="text-xs text-accent">(package size: {productData.quantity})</span>}</FormLabel>
+              <FormLabel>Palm-sized Portions Consumed {productData && productData.quantity && <span className="text-xs text-muted-foreground">(package size: {productData.quantity})</span>}</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., 2 slices, 100g, 1/2 pack" {...field} disabled={isScanning} />
+                <Input 
+                  type="number" 
+                  placeholder="e.g., 1.5" 
+                  step="0.1" 
+                  {...field} 
+                  disabled={isScanning} 
+                  // value={field.value || ''}
+                  // onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

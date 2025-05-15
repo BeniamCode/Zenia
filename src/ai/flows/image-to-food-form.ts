@@ -22,7 +22,7 @@ export type ImageToFoodFormInput = z.infer<typeof ImageToFoodFormInputSchema>;
 
 const ImageToFoodFormOutputSchema = z.object({
   description: z.string().describe('A description of the food item in the image.'),
-  portionSize: z.string().optional().describe('The estimated portion size of the food item.'),
+  portionSize: z.number().optional().describe('The estimated number of palm-sized portions of the food item. One palm-sized portion is roughly the size of the user\'s palm.'),
 });
 export type ImageToFoodFormOutput = z.infer<typeof ImageToFoodFormOutputSchema>;
 
@@ -36,11 +36,13 @@ const prompt = ai.definePrompt({
   output: {schema: ImageToFoodFormOutputSchema},
   prompt: `You are an AI assistant helping users log their food intake.
 
-You will receive a photo of a meal and generate a description of the food item and estimate the portion size.
+You will receive a photo of a meal. Your tasks are:
+1. Generate a concise description of the food item(s) in the image.
+2. Estimate the portion size in terms of "palm-sized units". One palm-sized portion is roughly the size of an average adult's palm (excluding fingers). For example, a medium apple might be 1 palm-sized portion, a large chicken breast might be 1.5-2 palm-sized portions. Provide this as a number.
 
 Photo: {{media url=photoDataUri}}
 
-Description:`,
+Respond with the description and the estimated number of palm-sized portions.`,
 });
 
 const imageToFoodFormFlow = ai.defineFlow(

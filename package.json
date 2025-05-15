@@ -46,7 +46,7 @@
     "genkit": "^1.8.0",
     "lucide-react": "^0.475.0",
     "next": "15.2.3",
-    "openfoodfacts-nodejs": "git+https://github.com/openfoodfacts/openfoodfacts-nodejs.git",
+    "openfoodfacts-nodejs": "git+https://github.com/openfoodfacts/openfoodfacts-nodejs.git#master",
     "patch-package": "^8.0.0",
     "quagga": "^0.12.1",
     "react": "^18.3.1",
