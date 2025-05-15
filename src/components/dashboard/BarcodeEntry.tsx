@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -20,13 +21,24 @@ import { addFoodLogEntry } from "@/lib/firestoreActions";
 import { Loader2, ScanLine, Search, UploadCloud, Info, Edit3, Video, VideoOff, CameraOff } from 'lucide-react';
 import Image from 'next/image';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-// For actual barcode scanning, consider installing: npm install @zxing/library
-// import { BrowserMultiFormatReader, NotFoundException, BarcodeFormat, DecodeHintType } from '@zxing/library';
+import Quagga from 'quagga'; // ES6 import
+
+// Minimal type definitions for QuaggaJS to avoid errors if @types/quagga is not available
+interface QuaggaJSCodeResult {
+  code: string | null;
+  format?: string;
+  // Add other properties from codeResult if needed
+}
+
+interface QuaggaJSResultObject {
+  codeResult: QuaggaJSCodeResult | null;
+  // Add other top-level result properties if needed (e.g., line, box)
+}
 
 const formSchema = z.object({
   barcode: z.string().optional(), 
   foodName: z.string().min(1, { message: "Food name is required." }).max(200, { message: "Food name must be 200 characters or less."}),
-  portionSize: z.string().min(1, { message: "Portion size is required." }).max(100, { message: "Portion size must be 100 characters or less."}), // Increased max length
+  portionSize: z.string().min(1, { message: "Portion size is required." }).max(100, { message: "Portion size must be 100 characters or less."}),
 });
 
 type BarcodeFormValues = z.infer<typeof formSchema>;
@@ -58,108 +70,21 @@ export function BarcodeEntry() {
   const [productData, setProductData] = useState<OpenFoodFactsProduct | null>(null);
   const [manualBarcode, setManualBarcode] = useState("");
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
-  // const codeReader = useRef<BrowserMultiFormatReader | null>(null);
-
-  const form = useForm<BarcodeFormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      foodName: "",
-      portionSize: "",
-      barcode: "",
-    },
-  });
-
-  const startScanner = async () => {
-    setIsScanning(true);
-    setProductData(null);
-    setCameraError(null);
-    form.reset(); // Clear previous form data
-    setManualBarcode(""); // Clear manual barcode input
-    toast({ title: "Scanner Activated (Placeholder)", description: "Point your camera at a barcode. Full scanning functionality requires a dedicated library and camera permissions."});
-    
-    // Conceptual @zxing/library integration (actual implementation is more involved)
-    /*
-    if (!codeReader.current) {
-      const hints = new Map();
-      const formats = [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.QR_CODE]; // Add more formats as needed
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-      codeReader.current = new BrowserMultiFormatReader(hints);
-    }
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setCameraError("Camera access not supported by your browser.");
-        setIsScanning(false);
-        return;
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => { // Ensure video dimensions are set
-            videoRef.current?.play().catch(err => {
-                console.error("Video play error:", err);
-                setCameraError("Could not start video playback.");
-                stopScanner();
-            });
-        };
-        
-        codeReader.current.decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
-          if (result) {
-            const scannedBarcode = result.getText();
-            form.setValue("barcode", scannedBarcode);
-            setManualBarcode(scannedBarcode); // Also update manual barcode field
-            fetchProductData(scannedBarcode);
-            stopScanner(); 
-          }
-          if (err && !(err instanceof NotFoundException)) {
-            console.error("Barcode scanning error:", err);
-            // Potentially too many toasts here, handle error display differently
-          }
-        });
-      }
-    } catch (error: any) {
-      console.error("Camera access error:", error);
-      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-        setCameraError("Camera permission denied. Please enable camera access in your browser settings.");
-      } else {
-        setCameraError("Could not access camera. Ensure it's not in use by another app.");
-      }
-      setIsScanning(false);
-    }
-    */
-  };
-  
-  const stopScanner = () => {
-    setIsScanning(false);
-    /*
-    if (codeReader.current) {
-      codeReader.current.reset();
-    }
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    */
-  };
-  
-  useEffect(() => {
-    return () => { 
-      stopScanner();
-    };
-  }, []);
+  const detectedOnce = useRef(false);
 
 
-  const fetchProductData = async (barcode: string) => {
+  const stableFetchProductData = useCallback(async (barcode: string) => {
     if (!barcode.trim()) {
         toast({ variant: "destructive", title: "Invalid Barcode", description: "Please enter or scan a valid barcode." });
         return;
     }
     setIsFetchingProduct(true);
-    setProductData(null); // Clear previous product data
-    form.resetField("foodName"); // Clear previous food name
-    form.resetField("portionSize"); // Clear previous portion size
+    setProductData(null); 
+    form.resetField("foodName");
+    form.resetField("portionSize");
 
     try {
       const response = await fetch(`https://world.openfoodfacts.org/api/v3/product/${barcode}.json?fields=product_name_en,product_name,generic_name_en,generic_name,image_url,image_small_url,brands,quantity`);
@@ -171,12 +96,14 @@ export function BarcodeEntry() {
         setProductData(product);
         const productName = product.product_name_en || product.product_name || product.generic_name_en || product.generic_name || "Unknown Product";
         form.setValue("foodName", productName);
+        form.setValue("barcode", barcode);
         form.setValue("portionSize", product.quantity || "1 serving (adjust as needed)");
         toast({ title: "Product Found!", description: productName });
       } else {
         toast({ variant: "destructive", title: "Product Not Found", description: data.status_verbose || "No product data found for this barcode." });
          form.setValue("foodName", "Unknown Product (Not Found)");
          form.setValue("portionSize", "1 serving");
+         form.setValue("barcode", barcode);
       }
     } catch (error: any) {
       toast({
@@ -186,8 +113,103 @@ export function BarcodeEntry() {
       });
         form.setValue("foodName", "Error Fetching Product");
         form.setValue("portionSize", "1 serving");
+        form.setValue("barcode", barcode);
     } finally {
       setIsFetchingProduct(false);
+    }
+  }, [toast, form]);
+
+
+  useEffect(() => {
+    const onDetected = (result: QuaggaJSResultObject | undefined) => {
+      if (!result || !result.codeResult || !result.codeResult.code || detectedOnce.current) return;
+      
+      detectedOnce.current = true; 
+      const scannedBarcode = result.codeResult.code;
+      if (scannedBarcode) {
+        form.setValue("barcode", scannedBarcode);
+        setManualBarcode(scannedBarcode);
+        stableFetchProductData(scannedBarcode);
+      }
+      setIsScanning(false); 
+    };
+
+    if (isScanning && videoRef.current) {
+      detectedOnce.current = false; 
+      setCameraError(null);
+      setHasCameraPermission(null); 
+
+      Quagga.init(
+        {
+          inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: videoRef.current,
+            constraints: {
+              width: 640, 
+              height: 480, 
+              facingMode: "environment",
+            },
+            willReadFrequently: true, 
+          },
+          locator: { patchSize: "medium", halfSample: true },
+          numOfWorkers: typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 2,
+          decoder: { 
+            readers: ["ean_reader", "ean_8_reader", "upc_reader", "upc_e_reader", "code_128_reader", "code_39_reader", "codabar_reader"],
+            multiple: false, 
+          },
+          locate: true,
+          frequency: 10, 
+        },
+        (err: any) => {
+          if (err) {
+            console.error("Quagga initialization error:", err);
+            let errorMessage = `Failed to initialize scanner. Ensure camera access is allowed.`;
+            if (typeof err === 'string') errorMessage = err;
+            else if (err.message) errorMessage = err.message;
+            else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                errorMessage = 'Camera permission denied. Please enable camera access in your browser settings.';
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError'){
+                errorMessage = 'No camera found. Please ensure a camera is connected and enabled.';
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                errorMessage = 'Camera is already in use or could not be accessed.';
+            }
+            setCameraError(errorMessage);
+            setIsScanning(false);
+            setHasCameraPermission(false);
+            return;
+          }
+          setHasCameraPermission(true);
+          setCameraError(null);
+          Quagga.start();
+        }
+      );
+      Quagga.onDetected(onDetected);
+    }
+
+    return () => {
+      Quagga.offDetected(onDetected);
+      // Check if Quagga is running before stopping
+      // Note: Quagga.running is not a documented public API, but Quagga.stop() itself is safe to call.
+      // It handles internal checks.
+      Quagga.stop();
+      if (videoRef.current && videoRef.current.srcObject) {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getTracks().forEach(track => track.stop());
+          videoRef.current.srcObject = null;
+      }
+    };
+  }, [isScanning, stableFetchProductData, form, toast]);
+
+
+  const toggleScanner = () => {
+    if (isScanning) {
+      setIsScanning(false); 
+    } else {
+      setProductData(null);
+      form.reset();
+      setManualBarcode("");
+      setIsScanning(true); 
     }
   };
 
@@ -212,7 +234,7 @@ export function BarcodeEntry() {
       form.reset();
       setProductData(null);
       setManualBarcode("");
-      if(isScanning) stopScanner();
+      if(isScanning) setIsScanning(false);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -232,23 +254,36 @@ export function BarcodeEntry() {
         <div className="space-y-2">
           <FormLabel>Scan Barcode or Enter Manually</FormLabel>
           <div className="flex gap-2">
-            <Button type="button" onClick={isScanning ? stopScanner : startScanner} variant="outline" className="flex-shrink-0">
+            <Button type="button" onClick={toggleScanner} variant="outline" className="flex-shrink-0">
               {isScanning ? <VideoOff className="mr-2 h-4 w-4" /> : <Video className="mr-2 h-4 w-4" />}
               {isScanning ? 'Stop Scanner' : 'Start Scanner'}
             </Button>
           </div>
+
           {isScanning && (
-            <div className="mt-2 p-2 border rounded-md bg-muted aspect-video w-full max-w-md mx-auto relative">
-              <video ref={videoRef} className="w-full h-full object-cover rounded" playsInline muted />
-              {/* Placeholder for scanning line animation if desired */}
-              {/* <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500 animate-pulse"></div> */}
-              {!cameraError && <p className="text-xs text-muted-foreground text-center mt-1">Align barcode within view. (Scanning is a placeholder)</p>}
+            <div className="mt-2 p-2 border rounded-md bg-muted aspect-video w-full max-w-md mx-auto relative overflow-hidden">
+              <video ref={videoRef} className="w-full h-full object-cover rounded" playsInline autoPlay muted />
             </div>
           )}
-          {cameraError && (
+          
+          { hasCameraPermission === false && ( 
              <Alert variant="destructive" className="mt-2">
                 <CameraOff className="h-4 w-4" />
-                <AlertTitle>Camera Error</AlertTitle>
+                <AlertTitle>Camera Access Issue</AlertTitle>
+                <AlertDescription>{cameraError || "Could not access camera. Please check permissions."}</AlertDescription>
+            </Alert>
+          )}
+           {isScanning && hasCameraPermission === null && !cameraError && ( 
+            <Alert className="mt-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <AlertTitle>Accessing Camera</AlertTitle>
+                <AlertDescription>Please allow camera access to start scanning.</AlertDescription>
+            </Alert>
+          )}
+           {isScanning && cameraError && ( 
+             <Alert variant="destructive" className="mt-2">
+                <CameraOff className="h-4 w-4" />
+                <AlertTitle>Scanner Error</AlertTitle>
                 <AlertDescription>{cameraError}</AlertDescription>
             </Alert>
           )}
@@ -266,18 +301,19 @@ export function BarcodeEntry() {
                       id="manualBarcode"
                       placeholder="Enter barcode manually" 
                       {...field} 
-                      value={manualBarcode}  // Controlled by manualBarcode state
+                      value={manualBarcode}
                       onChange={(e) => {
                         setManualBarcode(e.target.value);
-                        field.onChange(e.target.value); // Also update form state
+                        field.onChange(e.target.value); // Keep react-hook-form in sync if needed
                       }}
+                      disabled={isScanning}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="button" onClick={() => fetchProductData(manualBarcode)} disabled={isFetchingProduct || !manualBarcode.trim()} className="flex-shrink-0">
+            <Button type="button" onClick={() => stableFetchProductData(manualBarcode)} disabled={isFetchingProduct || !manualBarcode.trim() || isScanning} className="flex-shrink-0">
               {isFetchingProduct ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
               Fetch Info
             </Button>
@@ -296,8 +332,8 @@ export function BarcodeEntry() {
                     alt={productData.product_name || 'Product Image'} 
                     width={80} 
                     height={80} 
-                    className="rounded-md object-cover border bg-white w-full h-full"
-                    data-ai-hint="food product" 
+                    className="rounded-md object-cover border bg-white w-auto h-auto"
+                    data-ai-hint="food product"
                   />
                 }
                 <div className="flex-1">
@@ -317,7 +353,7 @@ export function BarcodeEntry() {
             <FormItem>
               <FormLabel>Food Item Name {productData && <span className="text-xs text-accent">(from API, editable)</span>}</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Whole Wheat Bread" {...field} />
+                <Input placeholder="e.g., Whole Wheat Bread" {...field} disabled={isScanning}/>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -330,7 +366,7 @@ export function BarcodeEntry() {
             <FormItem>
               <FormLabel>Portion Size Consumed {productData && productData.quantity && <span className="text-xs text-accent">(package size: {productData.quantity})</span>}</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., 2 slices, 100g, 1/2 pack" {...field} />
+                <Input placeholder="e.g., 2 slices, 100g, 1/2 pack" {...field} disabled={isScanning} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -341,7 +377,7 @@ export function BarcodeEntry() {
           {productData ? <Edit3 className="mr-2 h-4 w-4" /> : <UploadCloud className="mr-2 h-4 w-4" /> }
           {productData ? 'Confirm and Add to Log' : 'Add to Log Manually'}
         </Button>
-         <p className="text-xs text-muted-foreground">Note: Barcode scanning requires camera access. Actual scanning functionality via camera is a placeholder and would need a library like @zxing/library for full implementation.</p>
+         <p className="text-xs text-muted-foreground">Note: Barcode scanning uses your device camera. Ensure you have granted permission if prompted.</p>
       </form>
     </Form>
   );
